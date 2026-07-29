@@ -112,6 +112,23 @@ function movePacman( game ) {
   wrapTunnel( p, width );
 }
 
+// Elige la direccion que minimiza la distancia Manhattan hacia un objetivo.
+function chaseTarget( g, choices, tx, ty ) {
+  let best = choices[ 0 ];
+  let bestDist = Infinity;
+  for ( const dir of choices ) {
+    const d = DIRS[ dir ];
+    const nx = g.x + d.x;
+    const ny = g.y + d.y;
+    const dist = Math.abs( nx - tx ) + Math.abs( ny - ty );
+    if ( dist < bestDist ) {
+      bestDist = dist;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
   const p = game.pacman;
@@ -122,24 +139,28 @@ function decideGhost( game, g ) {
   // Sin salida (callejon): permitir el giro de 180.
   const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
 
+  const px = Math.round( p.x );
+  const py = Math.round( p.y );
+
   if ( g.kind === 'hunter' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
-    let best = choices[ 0 ];
-    let bestDist = Infinity;
-    for ( const dir of choices ) {
-      const d = DIRS[ dir ];
-      const nx = g.x + d.x;
-      const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
-      if ( dist < bestDist ) {
-        bestDist = dist;
-        best = dir;
-      }
+    g.dir = chaseTarget( g, choices, px, py );
+  } else if ( g.kind === 'ambush' ) {
+    const pd = DIRS[ p.dir ];
+    g.dir = chaseTarget( g, choices, px + 4 * pd.x, py + 4 * pd.y );
+  } else if ( g.kind === 'flank' ) {
+    const hunter = game.ghosts.find( ( gh ) => gh.kind === 'hunter' );
+    const pd = DIRS[ p.dir ];
+    // vector desde el pivote (hunter) hasta pacman + 4 * DIRS[pacman.dir]
+    const vx = ( px + 4 * pd.x ) - hunter.x;
+    const vy = ( py + 4 * pd.y ) - hunter.y;
+    g.dir = chaseTarget( g, choices, hunter.x + 2 * vx, hunter.y + 2 * vy );
+  } else if ( g.kind === 'intermittent' ) {
+    const dist = Math.abs( g.x - px ) + Math.abs( g.y - py );
+    if ( dist > 8 ) {
+      g.dir = chaseTarget( g, choices, px, py );
+    } else {
+      g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
     }
-    g.dir = best;
-  } else {
-    g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
   }
 }
 
