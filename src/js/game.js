@@ -36,12 +36,14 @@ function createGame() {
       nextDir: null,
       speed: PACMAN_SPEED,
     },
-    ghosts: GHOST_STARTS.map( ( g ) => ( {
+    ghosts: GHOST_STARTS.map( ( g, i ) => ( {
       x: g.x,
       y: g.y,
       dir: 'up',
       speed: GHOST_SPEED,
       kind: g.kind,
+      released: false,       // aún no ha salido de la pen
+      releaseDelay: i * 120, // frames a esperar antes de salir (escalonado)
     } ) ),
   };
 }
@@ -110,6 +112,23 @@ function movePacman( game ) {
   wrapTunnel( p, width );
 }
 
+// Elige la direccion que minimiza la distancia Manhattan hacia un objetivo.
+function chaseTarget( g, choices, tx, ty ) {
+  let best = choices[ 0 ];
+  let bestDist = Infinity;
+  for ( const dir of choices ) {
+    const d = DIRS[ dir ];
+    const nx = g.x + d.x;
+    const ny = g.y + d.y;
+    const dist = Math.abs( nx - tx ) + Math.abs( ny - ty );
+    if ( dist < bestDist ) {
+      bestDist = dist;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
   const p = game.pacman;
@@ -120,24 +139,42 @@ function decideGhost( game, g ) {
   // Sin salida (callejon): permitir el giro de 180.
   const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
 
+  const px = Math.round( p.x );
+  const py = Math.round( p.y );
+
   if ( g.kind === 'hunter' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
-    let best = choices[ 0 ];
-    let bestDist = Infinity;
-    for ( const dir of choices ) {
-      const d = DIRS[ dir ];
-      const nx = g.x + d.x;
-      const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
-      if ( dist < bestDist ) {
-        bestDist = dist;
-        best = dir;
-      }
+    g.dir = chaseTarget( g, choices, px, py );
+  } else if ( g.kind === 'ambush' ) {
+    const pd = DIRS[ p.dir ];
+    g.dir = chaseTarget( g, choices, px + 4 * pd.x, py + 4 * pd.y );
+  } else if ( g.kind === 'flank' ) {
+    const hunter = game.ghosts.find( ( gh ) => gh.kind === 'hunter' );
+    const pd = DIRS[ p.dir ];
+    // vector desde el pivote (hunter) hasta pacman + 4 * DIRS[pacman.dir]
+    const vx = ( px + 4 * pd.x ) - hunter.x;
+    const vy = ( py + 4 * pd.y ) - hunter.y;
+    g.dir = chaseTarget( g, choices, hunter.x + 2 * vx, hunter.y + 2 * vy );
+  } else if ( g.kind === 'intermittent' ) {
+    const dist = Math.abs( g.x - px ) + Math.abs( g.y - py );
+    if ( dist > 8 ) {
+      g.dir = chaseTarget( g, choices, px, py );
+    } else {
+      g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
     }
-    g.dir = best;
+  }
+}
+
+// Salida escalonada de la pen. Mientras released === false:
+//   1) esperar releaseDelay (frames) sin moverse;
+//   2) alinear horizontalmente a la columna de la puerta mas cercana
+//      (13 o 14; la puerta esta en cols 13-14 de la fila 12);
+//   3) subir recto y, al cruzar la fila de la puerta, marcar released = true.
+function releaseFromPen( g ) {
+  const doorCol = g.x < 14 ? 13 : 14;
+  if ( g.x !== doorCol ) {
+    g.dir = g.x < doorCol ? 'right' : 'left';
   } else {
-    g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
+    g.dir = 'up';
   }
 }
 
@@ -148,7 +185,17 @@ function moveGhost( game, g ) {
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
-    decideGhost( game, g );
+
+    if ( !g.released ) {
+      if ( g.releaseDelay > 0 ) {
+        g.releaseDelay--;
+        return;
+      }
+      releaseFromPen( g );
+    } else {
+      decideGhost( game, g );
+    }
+
     if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
   }
 
@@ -156,6 +203,11 @@ function moveGhost( game, g ) {
   g.x += d.x * g.speed;
   g.y += d.y * g.speed;
   wrapTunnel( g, width );
+
+  // Fila de la puerta = 12. Al cruzarla (g.y < 12) el fantasma ya esta fuera.
+  if ( !g.released && g.y < 12 ) {
+    g.released = true;
+  }
 }
 
 function resetPositions( game ) {
@@ -168,6 +220,8 @@ function resetPositions( game ) {
     g.x = GHOST_STARTS[ i ].x;
     g.y = GHOST_STARTS[ i ].y;
     g.dir = 'up';
+    g.released = false;
+    g.releaseDelay = i * 120;
   } );
 }
 
