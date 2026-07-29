@@ -276,13 +276,25 @@ function update( game ) {
 
   for ( const g of game.ghosts ) {
     if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
+      if ( g.frightened ) {
+        // Fantasma comido: reaparece en la pen, sin restar vida.
+        game.score += 200;
+        const i = game.ghosts.indexOf( g );
+        g.x = GHOST_STARTS[ i ].x;
+        g.y = GHOST_STARTS[ i ].y;
+        g.dir = 'up';
+        g.released = false;
+        g.releaseDelay = 60;
+        g.frightened = false;
+      } else {
+        game.lives--;
+        if ( game.lives <= 0 ) {
+          game.state = 'lost';
+          return;
+        }
+        resetPositions( game );
+        break;
       }
-      resetPositions( game );
-      break;
     }
   }
 
