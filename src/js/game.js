@@ -143,6 +143,20 @@ function decideGhost( game, g ) {
   }
 }
 
+// Salida escalonada de la pen. Mientras released === false:
+//   1) esperar releaseDelay (frames) sin moverse;
+//   2) alinear horizontalmente a la columna de la puerta mas cercana
+//      (13 o 14; la puerta esta en cols 13-14 de la fila 12);
+//   3) subir recto y, al cruzar la fila de la puerta, marcar released = true.
+function releaseFromPen( g ) {
+  const doorCol = g.x < 14 ? 13 : 14;
+  if ( g.x !== doorCol ) {
+    g.dir = g.x < doorCol ? 'right' : 'left';
+  } else {
+    g.dir = 'up';
+  }
+}
+
 function moveGhost( game, g ) {
   const grid = game.grid;
   const width = grid[ 0 ].length;
@@ -150,7 +164,17 @@ function moveGhost( game, g ) {
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
-    decideGhost( game, g );
+
+    if ( !g.released ) {
+      if ( g.releaseDelay > 0 ) {
+        g.releaseDelay--;
+        return;
+      }
+      releaseFromPen( g );
+    } else {
+      decideGhost( game, g );
+    }
+
     if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
   }
 
@@ -158,6 +182,11 @@ function moveGhost( game, g ) {
   g.x += d.x * g.speed;
   g.y += d.y * g.speed;
   wrapTunnel( g, width );
+
+  // Fila de la puerta = 12. Al cruzarla (g.y < 12) el fantasma ya esta fuera.
+  if ( !g.released && g.y < 12 ) {
+    g.released = true;
+  }
 }
 
 function resetPositions( game ) {
@@ -170,6 +199,8 @@ function resetPositions( game ) {
     g.x = GHOST_STARTS[ i ].x;
     g.y = GHOST_STARTS[ i ].y;
     g.dir = 'up';
+    g.released = false;
+    g.releaseDelay = i * 120;
   } );
 }
 
