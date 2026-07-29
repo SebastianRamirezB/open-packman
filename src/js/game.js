@@ -21,7 +21,7 @@ function createGame() {
   grid[ PACMAN_START.y ][ PACMAN_START.x ] = 0;
 
   let dots = 0;
-  for ( const row of grid ) for ( const v of row ) if ( v === 2 ) dots++;
+  for ( const row of grid ) for ( const v of row ) if ( v === 2 || v === 4 ) dots++;
 
   return {
     state: 'start',
@@ -29,6 +29,7 @@ function createGame() {
     lives: 3,
     dotsRemaining: dots,
     grid,
+    frightTimer: 0, // frames restantes de modo asustado; 0 = inactivo
     pacman: {
       x: PACMAN_START.x,
       y: PACMAN_START.y,
@@ -44,6 +45,7 @@ function createGame() {
       kind: g.kind,
       released: false,       // aún no ha salido de la pen
       releaseDelay: i * 120, // frames a esperar antes de salir (escalonado)
+      frightened: false,    // true mientras huye de Pac-Man
     } ) ),
   };
 }
@@ -102,6 +104,16 @@ function movePacman( game ) {
       game.score += 10;
       game.dotsRemaining--;
     }
+    // Comer Power Pellet.
+    if ( grid[ p.y ][ p.x ] === 4 ) {
+      grid[ p.y ][ p.x ] = 0;
+      game.score += 50;
+      game.dotsRemaining--;
+      game.frightTimer = 480;
+      game.ghosts.forEach( ( g ) => {
+        if ( g.released ) g.frightened = true;
+      } );
+    }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
   }
@@ -129,6 +141,23 @@ function chaseTarget( g, choices, tx, ty ) {
   return best;
 }
 
+// Elige la direccion que MAXIMIZA la distancia Manhattan a un objetivo (huida).
+function fleeTarget( g, choices, tx, ty ) {
+  let best = choices[ 0 ];
+  let bestDist = -Infinity;
+  for ( const dir of choices ) {
+    const d = DIRS[ dir ];
+    const nx = g.x + d.x;
+    const ny = g.y + d.y;
+    const dist = Math.abs( nx - tx ) + Math.abs( ny - ty );
+    if ( dist > bestDist ) {
+      bestDist = dist;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
   const p = game.pacman;
@@ -141,6 +170,12 @@ function decideGhost( game, g ) {
 
   const px = Math.round( p.x );
   const py = Math.round( p.y );
+
+  // Fantasma asustado: huye maximizando distancia Manhattan a Pac-Man.
+  if ( g.frightened ) {
+    g.dir = fleeTarget( g, choices, px, py );
+    return;
+  }
 
   if ( g.kind === 'hunter' ) {
     g.dir = chaseTarget( g, choices, px, py );
@@ -200,14 +235,20 @@ function moveGhost( game, g ) {
   }
 
   const d = DIRS[ g.dir ];
-  g.x += d.x * g.speed;
-  g.y += d.y * g.speed;
+  const speed = g.frightened ? g.speed * 0.5 : g.speed;
+  g.x += d.x * speed;
+  g.y += d.y * speed;
   wrapTunnel( g, width );
 
   // Fila de la puerta = 12. Al cruzarla (g.y < 12) el fantasma ya esta fuera.
   if ( !g.released && g.y < 12 ) {
     g.released = true;
+    // Si el timer sigue activo, el recién liberado tambien se asusta.
+    if ( game.frightTimer > 0 ) g.frightened = true;
   }
+
+  //Expiracion del modo asustado.
+  if ( g.frightened && game.frightTimer <= 0 ) g.frightened = false;
 }
 
 function resetPositions( game ) {
@@ -216,12 +257,14 @@ function resetPositions( game ) {
   p.y = PACMAN_START.y;
   p.dir = 'left';
   p.nextDir = null;
+  game.frightTimer = 0;
   game.ghosts.forEach( ( g, i ) => {
     g.x = GHOST_STARTS[ i ].x;
     g.y = GHOST_STARTS[ i ].y;
     g.dir = 'up';
     g.released = false;
     g.releaseDelay = i * 120;
+    g.frightened = false;
   } );
 }
 
@@ -235,17 +278,42 @@ function update( game ) {
 
   for ( const g of game.ghosts ) {
     if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
+      if ( g.frightened ) {
+        // Fantasma comido: reaparece en la pen, sin restar vida.
+        game.score += 200;
+        const i = game.ghosts.indexOf( g );
+        g.x = GHOST_STARTS[ i ].x;
+        g.y = GHOST_STARTS[ i ].y;
+        g.dir = 'up';
+        g.released = false;
+        g.releaseDelay = 60;
+        g.frightened = false;
+      } else {
+        game.lives--;
+        if ( game.lives <= 0 ) {
+          game.state = 'lost';
+          game.frightTimer = 0;
+          game.ghosts.forEach( ( g ) => { g.frightened = false; } );
+          return;
+        }
+        resetPositions( game );
+        break;
       }
-      resetPositions( game );
-      break;
     }
   }
 
-  if ( game.dotsRemaining <= 0 ) game.state = 'won';
+  if ( game.dotsRemaining <= 0 ) {
+    game.state = 'won';
+    game.frightTimer = 0;
+    game.ghosts.forEach( ( g ) => { g.frightened = false; } );
+  }
+
+  // Decrementar timer de modo asustado (al final, tras mover y colisionar).
+  if ( game.frightTimer > 0 ) game.frightTimer--;
+  // Al expirar: todos los fantasmas vuelven a estado normal.
+  if ( game.frightTimer === 0 ) {
+    game.ghosts.forEach( ( g ) => { g.frightened = false; } );
+  }
 }
 
 window.createGame = createGame;

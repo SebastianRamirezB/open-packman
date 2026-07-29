@@ -70,10 +70,11 @@ function drawDots( ctx, grid ) {
   ctx.fillStyle = DOT_COLOR;
   for ( let y = 0; y < grid.length; y++ ) {
     for ( let x = 0; x < grid[ 0 ].length; x++ ) {
-      if ( grid[ y ][ x ] !== 2 ) continue;
+      const v = grid[ y ][ x ];
+      if ( v !== 2 && v !== 4 ) continue;
       const { cx, cy } = cellCenter( x, y );
       ctx.beginPath();
-      ctx.arc( cx, cy, 2.5, 0, Math.PI * 2 );
+      ctx.arc( cx, cy, v === 4 ? 6 : 2.5, 0, Math.PI * 2 );
       ctx.fill();
     }
   }
@@ -98,7 +99,20 @@ function drawPacman( ctx, p, frame ) {
   ctx.fill();
 }
 
-function drawGhost( ctx, g, color ) {
+function drawGhost( ctx, g, color, frame, frightTimer ) {
+  let bodyColor = color;
+  let eyeColor = '#0000bb';
+  let pupilColor = '#0000bb';
+  if ( g.frightened ) {
+    bodyColor = '#2121ff';
+    eyeColor = '#fff';
+    pupilColor = '#fff';
+    // Parpadeo a blanco en los ultimos 120 frames del timer.
+    if ( frightTimer < 120 && frame % 16 < 8 ) {
+      bodyColor = '#fff';
+      pupilColor = '#ff0000';
+    }
+  }
   const { cx, cy } = cellCenter( g.x, g.y );
   const r = TILE / 2 - 1;
   const top = cy - r;
@@ -106,7 +120,7 @@ function drawGhost( ctx, g, color ) {
   const left = cx - r;
   const right = cx + r;
 
-  ctx.fillStyle = color;
+  ctx.fillStyle = bodyColor;
   ctx.beginPath();
   ctx.arc( cx, cy - 1, r, Math.PI, 0, false ); // cabeza
   ctx.lineTo( right, bottom );
@@ -123,11 +137,11 @@ function drawGhost( ctx, g, color ) {
   const ex = dir.x * 1.6;
   const ey = dir.y * 1.6;
   for ( const off of [ -3.5, 3.5 ] ) {
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = eyeColor;
     ctx.beginPath();
     ctx.arc( cx + off, cy - 1, 3, 0, Math.PI * 2 );
     ctx.fill();
-    ctx.fillStyle = '#0000bb';
+    ctx.fillStyle = pupilColor;
     ctx.beginPath();
     ctx.arc( cx + off + ex, cy - 1 + ey, 1.5, 0, Math.PI * 2 );
     ctx.fill();
@@ -163,7 +177,7 @@ function draw( ctx, game, frame ) {
   drawDoor( ctx, grid );
   drawDots( ctx, grid );
   drawPacman( ctx, game.pacman, frame );
-  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, GHOST_COLORS[ g.kind ] || '#ff0000' ) );
+  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, GHOST_COLORS[ g.kind ] || '#ff0000', frame, game.frightTimer ) );
   drawHUD( ctx, game, W );
 }
 
