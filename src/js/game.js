@@ -36,12 +36,14 @@ function createGame() {
       nextDir: null,
       speed: PACMAN_SPEED,
     },
-    ghosts: GHOST_STARTS.map( ( g ) => ( {
+    ghosts: GHOST_STARTS.map( ( g, i ) => ( {
       x: g.x,
       y: g.y,
       dir: 'up',
       speed: GHOST_SPEED,
       kind: g.kind,
+      released: false,       // aún no ha salido de la pen
+      releaseDelay: i * 120, // frames a esperar antes de salir (escalonado)
     } ) ),
   };
 }
