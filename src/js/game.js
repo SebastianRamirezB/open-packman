@@ -257,12 +257,14 @@ function resetPositions( game ) {
   p.y = PACMAN_START.y;
   p.dir = 'left';
   p.nextDir = null;
+  game.frightTimer = 0;
   game.ghosts.forEach( ( g, i ) => {
     g.x = GHOST_STARTS[ i ].x;
     g.y = GHOST_STARTS[ i ].y;
     g.dir = 'up';
     g.released = false;
     g.releaseDelay = i * 120;
+    g.frightened = false;
   } );
 }
 
@@ -290,6 +292,8 @@ function update( game ) {
         game.lives--;
         if ( game.lives <= 0 ) {
           game.state = 'lost';
+          game.frightTimer = 0;
+          game.ghosts.forEach( ( g ) => { g.frightened = false; } );
           return;
         }
         resetPositions( game );
@@ -298,7 +302,14 @@ function update( game ) {
     }
   }
 
-  if ( game.dotsRemaining <= 0 ) game.state = 'won';
+  if ( game.dotsRemaining <= 0 ) {
+    game.state = 'won';
+    game.frightTimer = 0;
+    game.ghosts.forEach( ( g ) => { g.frightened = false; } );
+  }
+
+  // Decrementar timer de modo asustado (al final, tras mover y colisionar).
+  if ( game.frightTimer > 0 ) game.frightTimer--;
 }
 
 window.createGame = createGame;
