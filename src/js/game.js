@@ -21,7 +21,7 @@ function createGame() {
   grid[ PACMAN_START.y ][ PACMAN_START.x ] = 0;
 
   let dots = 0;
-  for ( const row of grid ) for ( const v of row ) if ( v === 2 ) dots++;
+  for ( const row of grid ) for ( const v of row ) if ( v === 2 || v === 4 ) dots++;
 
   return {
     state: 'start',
@@ -29,6 +29,7 @@ function createGame() {
     lives: 3,
     dotsRemaining: dots,
     grid,
+    frightTimer: 0, // frames restantes de modo asustado; 0 = inactivo
     pacman: {
       x: PACMAN_START.x,
       y: PACMAN_START.y,
@@ -44,6 +45,7 @@ function createGame() {
       kind: g.kind,
       released: false,       // aún no ha salido de la pen
       releaseDelay: i * 120, // frames a esperar antes de salir (escalonado)
+      frightened: false,    // true mientras huye de Pac-Man
     } ) ),
   };
 }
