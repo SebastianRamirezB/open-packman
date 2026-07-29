@@ -310,6 +310,10 @@ function update( game ) {
 
   // Decrementar timer de modo asustado (al final, tras mover y colisionar).
   if ( game.frightTimer > 0 ) game.frightTimer--;
+  // Al expirar: todos los fantasmas vuelven a estado normal.
+  if ( game.frightTimer === 0 ) {
+    game.ghosts.forEach( ( g ) => { g.frightened = false; } );
+  }
 }
 
 window.createGame = createGame;
