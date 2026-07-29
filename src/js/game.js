@@ -141,6 +141,23 @@ function chaseTarget( g, choices, tx, ty ) {
   return best;
 }
 
+// Elige la direccion que MAXIMIZA la distancia Manhattan a un objetivo (huida).
+function fleeTarget( g, choices, tx, ty ) {
+  let best = choices[ 0 ];
+  let bestDist = -Infinity;
+  for ( const dir of choices ) {
+    const d = DIRS[ dir ];
+    const nx = g.x + d.x;
+    const ny = g.y + d.y;
+    const dist = Math.abs( nx - tx ) + Math.abs( ny - ty );
+    if ( dist > bestDist ) {
+      bestDist = dist;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
   const p = game.pacman;
@@ -153,6 +170,12 @@ function decideGhost( game, g ) {
 
   const px = Math.round( p.x );
   const py = Math.round( p.y );
+
+  // Fantasma asustado: huye maximizando distancia Manhattan a Pac-Man.
+  if ( g.frightened ) {
+    g.dir = fleeTarget( g, choices, px, py );
+    return;
+  }
 
   if ( g.kind === 'hunter' ) {
     g.dir = chaseTarget( g, choices, px, py );
@@ -212,14 +235,20 @@ function moveGhost( game, g ) {
   }
 
   const d = DIRS[ g.dir ];
-  g.x += d.x * g.speed;
-  g.y += d.y * g.speed;
+  const speed = g.frightened ? g.speed * 0.5 : g.speed;
+  g.x += d.x * speed;
+  g.y += d.y * speed;
   wrapTunnel( g, width );
 
   // Fila de la puerta = 12. Al cruzarla (g.y < 12) el fantasma ya esta fuera.
   if ( !g.released && g.y < 12 ) {
     g.released = true;
+    // Si el timer sigue activo, el recién liberado tambien se asusta.
+    if ( game.frightTimer > 0 ) g.frightened = true;
   }
+
+  //Expiracion del modo asustado.
+  if ( g.frightened && game.frightTimer <= 0 ) g.frightened = false;
 }
 
 function resetPositions( game ) {
